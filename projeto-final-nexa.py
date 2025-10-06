@@ -115,10 +115,11 @@ if st.session_state.google_api_key and st.session_state.df is not None:
     # --- Dashboard Simples (Pode ser expandido) ---
     try:
         # Exemplo de gráfico: Faturamento por tipo de operação
-        if 'tipo_operacao' in st.session_state.df.columns and 'valor' in st.session_state.df.columns:
-            st.subheader("Faturamento por Tipo de Operação")
-            faturamento_por_tipo = st.session_state.df.groupby('tipo_operacao')['valor'].sum()
-            st.bar_chart(faturamento_por_tipo)
+        if 'NATUREZA DA OPERAÇÃO' in st.session_state.df.columns and 'VALOR TOTAL' in st.session_state.df.columns:
+    st.subheader("Faturamento por Natureza da Operação")
+    # Usamos os nomes exatos das colunas do seu arquivo
+    faturamento_por_tipo = st.session_state.df.groupby('NATUREZA DA OPERAÇÃO')['VALOR TOTAL'].sum()
+    st.bar_chart(faturamento_por_tipo)
     except Exception as e:
         st.warning(f"Não foi possível gerar o dashboard. Verifique as colunas do seu arquivo. Erro: {e}")
 
