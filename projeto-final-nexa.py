@@ -63,15 +63,33 @@ if "uploaded_file_name" not in st.session_state:
 with st.sidebar:
     st.header("1. Configuração Inicial")
     
-    # Campo para a API Key do Google
-    api_key_input = st.text_input("Chave da API do Google", type="password")
-    if api_key_input:
+    # Campo para a API Key do Google, sempre visível
+    api_key_input = st.text_input(
+        "Chave da API do Google", 
+        type="password", 
+        help="Insira sua chave da API do Google aqui."
+    )
+
+    # Lógica Híbrida para carregar a chave
+    # Tenta carregar dos segredos primeiro (para o seu uso no deploy)
+    try:
+        if "GOOGLE_API_KEY" in st.secrets and st.secrets["GOOGLE_API_KEY"]:
+            st.session_state.google_api_key = st.secrets["GOOGLE_API_KEY"]
+            os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+            # Mensagem discreta para confirmar que o segredo foi usado
+            st.sidebar.success("Chave da API carregada dos segredos.", icon="✅")
+    except:
+        # Se st.secrets não existir ou falhar, não faz nada, dependerá do input abaixo
+        pass
+
+    # Se a chave ainda não foi carregada pelos segredos, usa o input do usuário
+    if not st.session_state.get("google_api_key") and api_key_input:
         st.session_state.google_api_key = api_key_input
         os.environ["GOOGLE_API_KEY"] = api_key_input
-    
+        st.sidebar.success("Chave da API configurada.", icon="🔑")
+
+    # O resto da sua sidebar continua aqui...
     st.header("2. Perfil da Empresa")
-    
-    # Inputs para o perfil da empresa
     regime_tributario = st.selectbox(
         "Regime Tributário",
         ["Simples Nacional", "Lucro Presumido", "Lucro Real (Não implementado)"]
@@ -80,8 +98,6 @@ with st.sidebar:
     cnae = st.text_input("Atividade Principal (CNAE)", placeholder="Ex: 4781-4/00 (Comércio)")
 
     st.header("3. Upload dos Documentos")
-    
-    # Uploader de arquivos (Fase 1: Apenas CSV e Excel)
     arquivo = st.file_uploader(
         "Faça o upload de um arquivo (CSV ou Excel) com os dados das NFs",
         type=["csv", "xlsx"]
@@ -96,9 +112,8 @@ with st.sidebar:
                 st.session_state.df = pd.read_excel(arquivo)
             
             st.session_state.uploaded_file_name = arquivo.name
-            st.success(f"Arquivo '{arquivo.name}' carregado com sucesso!")
+            st.success(f"Arquivo '{arquivo.name}' carregado!", icon="📄")
             
-            # Reseta o agente e o chat para a nova análise
             st.session_state.agent = None
             st.session_state.messages = []
             
