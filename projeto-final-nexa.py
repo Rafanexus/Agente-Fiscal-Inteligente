@@ -7,7 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_community.tools import PythonAstREPLTool
+from langchain_experimental.agents import create_pandas_dataframe_agent
 
 # --- 1. DEFINIÇÃO DO PROMPT DO AGENTE FISCAL ---
 PREFIXO_AGENTE_FISCAL_OTIMIZADO = """
