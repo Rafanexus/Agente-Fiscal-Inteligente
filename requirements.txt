@@ -1,6 +1,10 @@
 streamlit
 pandas
-openpyxl
-matplotlib
+openpyxl # Necessário para ler arquivos .xlsx
+google-generativeai
+langchain
 langchain-experimental
 langchain-google-genai
+matplotlib
+tabulate
+tavily-python
