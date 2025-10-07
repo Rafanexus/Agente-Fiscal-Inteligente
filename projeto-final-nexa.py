@@ -128,15 +128,20 @@ with st.sidebar:
 if st.session_state.google_api_key and st.session_state.df is not None:
     
     st.header("Dashboard Gerencial")
-    # --- Dashboard Simples (Pode ser expandido) ---
     try:
-        # Exemplo de gráfico: Faturamento por tipo de operação
-        if 'NATUREZA DA OPERAÇÃO' in st.session_state.df.columns and 'VALOR TOTAL' in st.session_state.df.columns:
-            st.subheader("Faturamento por Tipo de Operação")
-            faturamento_por_tipo = st.session_state.df.groupby('NATUREZA DA OPERAÇÃO')['VALOR TOTAL'].sum()
-            st.bar_chart(faturamento_por_tipo)
-    except Exception as e:
-        st.warning(f"Não foi possível gerar o dashboard. Verifique as colunas do seu arquivo. Erro: {e}")
+        df_vendas = st.session_state.df[st.session_state.df['NATUREZA DA OPERAÇÃO'].str.contains("VENDA", case=False)]
+        faturamento_total = df_vendas['VALOR TOTAL'].sum()
+        num_notas = len(df_vendas['NÚMERO'].unique())
+        ticket_medio = faturamento_total / num_notas if num_notas > 0 else 0
+        num_clientes = df_vendas['NOME DESTINATÁRIO'].nunique()
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Faturamento Bruto (Vendas)", f"R$ {faturamento_total:,.2f}")
+        col2.metric("Notas Fiscais de Venda", num_notas)
+        col3.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
+        col4.metric("Clientes Únicos", num_clientes)
+    except Exception:
+        st.warning("Não foi possível gerar o dashboard. Verifique as colunas do seu arquivo.")
 
     st.header("Chat com o Agente Fiscal")
 
