@@ -3,8 +3,8 @@ pandas
 openpyxl
 google-generativeai
 langchain
-langchain-experimental
 langchain-google-genai
 matplotlib
 tabulate
 tavily-python
+langchain-community # Necessário para Tavily
