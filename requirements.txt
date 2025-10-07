@@ -1,10 +1,14 @@
-streamlit
-pandas
-openpyxl # Necessário para ler arquivos .xlsx
-google-generativeai
-langchain
-langchain-experimental
-langchain-google-genai
+streamlit>=1.30.0
+pandas>=2.0.0
+openpyxl
+google-generativeai>=0.4.0
 matplotlib
 tabulate
 tavily-python
+
+# --- LangChain Core Libraries ---
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-community>=0.2.0
+langchain-experimental>=0.0.50
+langchain-google-genai>=1.0.0
