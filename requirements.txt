@@ -7,3 +7,4 @@ langchain-experimental
 langchain-google-genai
 matplotlib
 tabulate
+tavily-python
