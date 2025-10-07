@@ -118,54 +118,53 @@ if st.session_state.google_api_key and st.session_state.tavily_api_key and st.se
 
     st.header("Chat com o Agente Fiscal")
 
-    # --- NOVA ARQUITETURA DO AGENTE ---
+    # --- NOVA ARQUITETURA DO AGENTE (VERSÃO ROBUSTA COM INDENTAÇÃO CORRIGIDA) ---
     if st.session_state.agent is None:
-    st.info("Inicializando o agente fiscal com busca na web...")
-    try:
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0, api_version="v1")
-        
-        # 1. CRIAR UM AGENTE PANDAS TEMPORÁRIO APENAS PARA "ROUBAR" SUA FERRAMENTA
-        # Esta é a maneira mais segura de obter a ferramenta de pandas correta, não importa a versão.
-        temp_pandas_agent_executor = create_pandas_dataframe_agent(
-            llm=llm,
-            df=st.session_state.df,
-            agent_type='tool-calling',
-            verbose=True
-        )
-        # A ferramenta de pandas é a primeira (e única) ferramenta deste agente temporário
-        pandas_tool = temp_pandas_agent_executor.tools[0]
-        pandas_tool.name = "analise_documento_fiscal" # Damos um nome claro
-        pandas_tool.description = "Use esta ferramenta para fazer qualquer análise, cálculo ou pergunta sobre o dataframe `df` que contém os dados das notas fiscais. Forneça a pergunta completa do usuário como input para esta ferramenta."
+        st.info("Inicializando o agente fiscal com busca na web...")
+        try:
+            llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0, api_version="v1")
+            
+            # 1. CRIAR UM AGENTE PANDAS TEMPORÁRIO APENAS PARA "ROUBAR" SUA FERRAMENTA
+            temp_pandas_agent_executor = create_pandas_dataframe_agent(
+                llm=llm,
+                df=st.session_state.df,
+                agent_type='tool-calling',
+                verbose=True
+            )
+            pandas_tool = temp_pandas_agent_executor.tools[0]
+            pandas_tool.name = "analise_documento_fiscal"
+            pandas_tool.description = "Use esta ferramenta para fazer qualquer análise, cálculo ou pergunta sobre o dataframe `df` que contém os dados das notas fiscais. Forneça a pergunta completa do usuário como input para esta ferramenta."
 
-        # 2. Criar a Ferramenta de Busca na Web (como antes)
-        search_tool = TavilySearchResults(max_results=3)
-        search_tool.name = "busca_web_para_informacoes_fiscais"
-        search_tool.description = "Use esta ferramenta para buscar informações atualizadas na internet que não estão no documento, como alíquotas de impostos, regras fiscais, legislação, tabelas do Simples Nacional e significado de códigos como CFOP."
-        
-        # 3. Juntar as ferramentas em uma lista
-        tools = [pandas_tool, search_tool]
-        
-        # 4. Prompt do Agente (como antes)
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("system", PREFIXO_AGENTE_FISCAL_OTIMIZADO),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ])
-        
-        # 5. Criação do Agente e do Executor (como antes)
-        agent = create_tool_calling_agent(llm, tools, prompt_template)
-        st.session_state.agent = AgentExecutor(
-            agent=agent, 
-            tools=tools, 
-            verbose=True, 
-            handle_parsing_errors=True
-        )
-        
-        st.success("Agente com acesso à internet pronto!")
-    except Exception as e:
-        st.error(f"Erro ao criar o agente: {e}")
-        st.stop()
+            # 2. Criar a Ferramenta de Busca na Web
+            search_tool = TavilySearchResults(max_results=3)
+            search_tool.name = "busca_web_para_informacoes_fiscais"
+            search_tool.description = "Use esta ferramenta para buscar informações atualizadas na internet que não estão no documento, como alíquotas de impostos, regras fiscais, legislação, tabelas do Simples Nacional e significado de códigos como CFOP."
+            
+            # 3. Juntar as ferramentas em uma lista
+            tools = [pandas_tool, search_tool]
+            
+            # 4. Prompt do Agente
+            prompt_template = ChatPromptTemplate.from_messages([
+                ("system", PREFIXO_AGENTE_FISCAL_OTIMIZADO),
+                ("placeholder", "{chat_history}"),
+                ("human", "{input}"),
+                ("placeholder", "{agent_scratchpad}"),
+            ])
+            
+            # 5. Criação do Agente e do Executor
+            agent = create_tool_calling_agent(llm, tools, prompt_template)
+            st.session_state.agent = AgentExecutor(
+                agent=agent, 
+                tools=tools, 
+                verbose=True, 
+                handle_parsing_errors=True
+            )
+            
+            st.success("Agente com acesso à internet pronto!")
+        except Exception as e:
+            st.error(f"Erro ao criar o agente: {e}")
+            st.stop()
+
 
     # Lógica do Chat (com o prompt aumentado)
     if not st.session_state.messages:
