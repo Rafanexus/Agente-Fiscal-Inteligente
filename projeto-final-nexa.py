@@ -1,25 +1,29 @@
-# app.py (FINAL STABLE VERSION)
+# app.py (FINAL WORKING VERSION)
 
 import streamlit as st
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-
-# --- Core LangChain Imports ---
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_community.tools import PythonAstREPLTool
+from langchain_experimental.agents import create_pandas_dataframe_agent
+
+# --- 1. DEFINIÇÃO DO PROMPT DO AGENTE FISCAL ---
+PREFIXO_AGENTE_FISCAL = """
+Você é um assistente fiscal de IA, especialista em tributação para PMEs no Brasil. Sua função é analisar um dataframe de notas fiscais.
+
+### REGRAS:
+1.  **FOCO TOTAL NOS DADOS:** Responda APENAS com base no dataframe `df`. Se a pergunta for sobre outro assunto, recuse educadamente.
+2.  **CÁLCULO DE IMPOSTOS:** Para calcular impostos, primeiro use o dataframe para encontrar a receita. Depois, se não souber a alíquota, PEÇA ao usuário por ela. Não invente valores.
+3.  **RESPOSTA ESTRUTURADA:** Apresente o resultado direto e depois uma breve explicação de como chegou a ele.
+"""
 
 # --- Configuração da Página Streamlit ---
 st.set_page_config(page_title="Agente Fiscal Inteligente", page_icon="🧾", layout="wide")
 st.title("🧾 Agente Fiscal Inteligente")
-st.write("Análise fiscal, cálculo de impostos e insights com o poder da IA e busca na web.")
+st.write("Um assistente de IA para análise e pré-apuração de impostos.")
 
 # --- Inicialização do Estado da Sessão ---
 if "google_api_key" not in st.session_state: st.session_state.google_api_key = None
-if "tavily_api_key" not in st.session_state: st.session_state.tavily_api_key = None
 if "df" not in st.session_state: st.session_state.df = None
 if "agent" not in st.session_state: st.session_state.agent = None
 if "messages" not in st.session_state: st.session_state.messages = []
@@ -27,19 +31,12 @@ if "uploaded_file_name" not in st.session_state: st.session_state.uploaded_file_
 
 # --- Barra Lateral (Sidebar) para Configurações ---
 with st.sidebar:
-    st.header("1. Configuração das APIs")
-    google_api_key_input = st.text_input("Chave da API do Google", type="password", help="Necessária para o modelo de linguagem.")
-    if google_api_key_input:
-        st.session_state.google_api_key = google_api_key_input
-        os.environ["GOOGLE_API_KEY"] = google_api_key_input
-
-    tavily_api_key_input = st.text_input("Chave da API da Tavily", type="password", help="Necessária para a busca na web.")
-    if tavily_api_key_input:
-        st.session_state.tavily_api_key = tavily_api_key_input
-        os.environ["TAVILY_API_KEY"] = tavily_api_key_input
-
+    st.header("1. Configuração da API")
+    api_key_input = st.text_input("Chave da API do Google", type="password")
+    if api_key_input:
+        st.session_state.google_api_key = api_key_input
+        os.environ["GOOGLE_API_KEY"] = api_key_input
     if st.session_state.google_api_key: st.sidebar.success("API do Google configurada.", icon="🔑")
-    if st.session_state.tavily_api_key: st.sidebar.success("API da Tavily configurada.", icon="🔎")
 
     st.header("2. Perfil da Empresa")
     regime_tributario = st.selectbox("Regime Tributário", ["Simples Nacional", "Lucro Presumido"])
@@ -50,10 +47,7 @@ with st.sidebar:
     arquivo = st.file_uploader("Faça o upload de um arquivo (CSV ou Excel)", type=["csv", "xlsx"])
     if arquivo is not None and st.session_state.get('uploaded_file_name') != arquivo.name:
         try:
-            if arquivo.name.endswith('.csv'):
-                st.session_state.df = pd.read_csv(arquivo)
-            else:
-                st.session_state.df = pd.read_excel(arquivo)
+            st.session_state.df = pd.read_csv(arquivo) if arquivo.name.endswith('.csv') else pd.read_excel(arquivo)
             st.session_state.uploaded_file_name = arquivo.name
             st.success(f"Arquivo '{arquivo.name}' carregado!", icon="📄")
             st.session_state.agent = None
@@ -63,7 +57,7 @@ with st.sidebar:
             st.session_state.df = None
 
 # --- Lógica Principal da Aplicação ---
-if st.session_state.google_api_key and st.session_state.tavily_api_key and st.session_state.df is not None:
+if st.session_state.google_api_key and st.session_state.df is not None:
     
     st.header("Dashboard Gerencial")
     try:
@@ -84,29 +78,25 @@ if st.session_state.google_api_key and st.session_state.tavily_api_key and st.se
     st.header("Chat com o Agente Fiscal")
 
     if st.session_state.agent is None:
-        st.info("Inicializando o agente fiscal com busca na web...")
+        st.info("Inicializando o agente fiscal...")
         try:
             llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, api_version="v1")
             
-            pandas_tool = PythonAstREPLTool(
-                name="analise_documento_fiscal",
-                description="Use esta ferramenta para fazer qualquer análise ou cálculo sobre o dataframe `df` de notas fiscais. O input para a ferramenta deve ser um código Python válido.",
-                locals={"df": st.session_state.df}
+            prompt_formatado = PREFIXO_AGENTE_FISCAL.format(
+                regime_tributario=regime_tributario,
+                faturamento_anual=faturamento_anual,
+                cnae=cnae
             )
-            search_tool = TavilySearchResults(max_results=3, name="busca_web_informacoes_fiscais")
-            tools = [pandas_tool, search_tool]
-            
-            prompt_template = ChatPromptTemplate.from_messages([
-                ("system", """Você é um assistente fiscal de IA para PMEs no Brasil. Use as ferramentas `analise_documento_fiscal` para consultar os dados do arquivo e `busca_web_informacoes_fiscais` para pesquisar leis e alíquotas na internet. Combine as ferramentas quando necessário. Responda de forma clara e estruturada."""),
-                ("placeholder", "{chat_history}"),
-                ("human", "{input}"),
-                ("placeholder", "{agent_scratchpad}"),
-            ])
-            
-            agent = create_tool_calling_agent(llm, tools, prompt_template)
-            st.session_state.agent = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
-            
-            st.success("Agente com acesso à internet pronto!")
+
+            st.session_state.agent = create_pandas_dataframe_agent(
+                llm=llm,
+                df=st.session_state.df,
+                agent_type='tool-calling',
+                prefix=prompt_formatado,
+                verbose=True,
+                handle_parsing_errors=True
+            )
+            st.success("Agente pronto para analisar seus dados!")
         except Exception as e:
             st.error(f"Erro ao criar o agente: {e}")
             st.stop()
@@ -118,17 +108,15 @@ if st.session_state.google_api_key and st.session_state.tavily_api_key and st.se
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Ex: Qual a alíquota do Simples Nacional para meu faturamento?"):
+    if prompt := st.chat_input("Ex: Qual o valor total das vendas este mês?"):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
-            with st.spinner("O agente está pensando e pesquisando..."):
+            with st.spinner("O agente está analisando..."):
                 try:
-                    prompt_aumentado = f"CONTEXTO DA EMPRESA: Regime: {regime_tributario}, Faturamento Anual: R$ {faturamento_anual}, CNAE: {cnae}. PERGUNTA: {prompt}"
-                    chat_history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                    response = st.session_state.agent.invoke({"input": prompt_aumentado, "chat_history": chat_history})
+                    response = st.session_state.agent.invoke({"input": prompt})
                     output_text = response["output"]
                     st.markdown(output_text)
                     st.session_state.messages.append({"role": "assistant", "content": output_text})
@@ -137,4 +125,4 @@ if st.session_state.google_api_key and st.session_state.tavily_api_key and st.se
                     st.error(error_message)
                     st.session_state.messages.append({"role": "assistant", "content": error_message})
 else:
-    st.info("Por favor, preencha as configurações de API e empresa, e faça o upload de um arquivo para começar.")
+    st.info("Por favor, preencha a API Key e carregue um arquivo para começar.")
