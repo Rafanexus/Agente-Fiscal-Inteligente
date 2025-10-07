@@ -118,67 +118,28 @@ if st.session_state.google_api_key and st.session_state.tavily_api_key and st.se
 
     st.header("Chat com o Agente Fiscal")
 
-# --- NOVA ARQUITETURA DO AGENTE (VERSÃO FINAL E MAIS ESTÁVEL) ---
+# --- TEMPORARY FAILSAFE AGENT CREATION ---
 if st.session_state.agent is None:
-    st.info("Inicializando o agente fiscal com busca na web...")
+    st.info("Inicializando o agente em modo de segurança...")
     try:
-        # Importações necessárias DENTRO do bloco, para clareza
-        from langchain.agents import AgentExecutor, create_tool_calling_agent
-        from langchain_core.prompts import ChatPromptTemplate
-        from langchain_community.tools.tavily_search import TavilySearchResults
-        from langchain_community.tools import PythonAstREPLTool # A NOVA FERRAMENTA
-
-        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, api_version="v1")
+        # We are temporarily removing the web search tool to ensure the app loads.
+        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0, api_version="v1")
         
-        # 1. CRIAR A FERRAMENTA DE ANÁLISE DE DADOS MANUALMENTE
-        # Damos à ferramenta acesso ao nosso dataframe 'df'
-        pandas_tool = PythonAstREPLTool(
-            name="analise_documento_fiscal",
-            description="Use esta ferramenta para fazer qualquer análise, cálculo ou pergunta sobre o dataframe `df` que contém os dados das notas fiscais. A ferramenta executa código Python. O input para a ferramenta deve ser um código Python válido para responder à pergunta do usuário.",
-            locals={"df": st.session_state.df} # AQUI ESTÁ A MÁGICA: damos acesso ao 'df'
-        )
-
-        # 2. Criar a Ferramenta de Busca na Web (como antes)
-        search_tool = TavilySearchResults(max_results=3)
-        search_tool.name = "busca_web_para_informacoes_fiscais"
-        search_tool.description = "Use esta ferramenta para buscar informações atualizadas na internet que não estão no documento, como alíquotas de impostos, regras fiscais, legislação, tabelas do Simples Nacional e significado de códigos como CFOP."
-        
-        # 3. Juntar as ferramentas em uma lista
-        tools = [pandas_tool, search_tool]
-        
-        # 4. Prompt do Agente (ajustado para a nova ferramenta)
-        # Não precisamos mais do prefixo, pois o prompt do agente é mais explícito
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """Você é um assistente fiscal de IA para PMEs no Brasil. Sua função é responder perguntas usando as ferramentas disponíveis.
-            
-            ### FERRAMENTAS:
-            1. `analise_documento_fiscal`: Executa código Python para analisar o dataframe `df` com os dados fiscais. Use-a para calcular faturamento, filtrar notas, etc.
-            2. `busca_web_para_informacoes_fiscais`: Busca informações atualizadas na web, como alíquotas e leis.
-
-            ### FLUXO DE TRABALHO:
-            - Para perguntas sobre os dados do arquivo, use a ferramenta `analise_documento_fiscal`.
-            - Para perguntas sobre leis, alíquotas ou informações externas, use `busca_web_para_informacoes_fiscais`.
-            - Para perguntas complexas (ex: calcular imposto), combine as ferramentas: primeiro use `analise_documento_fiscal` para obter o faturamento, depois use `busca_web_para_informacoes_fiscais` para obter a alíquota, e então faça o cálculo final.
-            - Responda de forma clara e estruturada.
-            """),
-            ("placeholder", "{chat_history}"),
-            ("human", "{input}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ])
-        
-        # 5. Criação do Agente e do Executor
-        agent = create_tool_calling_agent(llm, tools, prompt_template)
-        st.session_state.agent = AgentExecutor(
-            agent=agent, 
-            tools=tools, 
-            verbose=True, 
+        st.session_state.agent = create_pandas_dataframe_agent(
+            llm=llm,
+            df=st.session_state.df,
+            agent_type='tool-calling',
+            verbose=True,
             handle_parsing_errors=True
         )
         
-        st.success("Agente com acesso à internet pronto!")
+        st.success("Agente em modo de segurança carregado com sucesso!")
+        st.warning("Busca na web está temporariamente desativada.")
+
     except Exception as e:
-        st.error(f"Erro ao criar o agente: {e}")
+        st.error(f"Erro ao criar o agente em modo de segurança: {e}")
         st.stop()
+
 
     # Lógica do Chat (com o prompt aumentado)
     if not st.session_state.messages:
