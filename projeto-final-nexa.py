@@ -7,7 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_community.tools.pandas.tool import PandasDataFrameTool
+from langchain_community.tools import PythonAstREPLTool
 
 # --- 1. DEFINIÇÃO DO PROMPT DO AGENTE FISCAL ---
 PREFIXO_AGENTE_FISCAL_OTIMIZADO = """
@@ -128,7 +128,7 @@ if st.session_state.agent is None:
         from langchain_community.tools.tavily_search import TavilySearchResults
         from langchain_community.tools import PythonAstREPLTool # A NOVA FERRAMENTA
 
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0, api_version="v1")
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, api_version="v1")
         
         # 1. CRIAR A FERRAMENTA DE ANÁLISE DE DADOS MANUALMENTE
         # Damos à ferramenta acesso ao nosso dataframe 'df'
