@@ -4,9 +4,6 @@ import os
 import matplotlib.pyplot as plt
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_experimental.agents import create_pandas_dataframe_agent
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_experimental.tools.pandas.tool import PandasDataFrameTool
 
 # --- 1. DEFINIÇÃO DO PROMPT DO AGENTE FISCAL ---
 # Este é o "cérebro" do nosso agente. Ele será formatado com os dados da empresa.
