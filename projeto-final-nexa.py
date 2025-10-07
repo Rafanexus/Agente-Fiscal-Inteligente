@@ -129,19 +129,28 @@ if st.session_state.google_api_key and st.session_state.df is not None:
     
     st.header("Dashboard Gerencial")
     try:
-        df_vendas = st.session_state.df[st.session_state.df['NATUREZA DA OPERAÇÃO'].str.contains("VENDA", case=False)]
-        faturamento_total = df_vendas['VALOR TOTAL'].sum()
-        num_notas = len(df_vendas['NÚMERO'].unique())
-        ticket_medio = faturamento_total / num_notas if num_notas > 0 else 0
-        num_clientes = df_vendas['NOME DESTINATÁRIO'].nunique()
+        # Lista de colunas necessárias para o dashboard
+        colunas_necessarias = ['NATUREZA DA OPERAÇÃO', 'VALOR TOTAL', 'NÚMERO', 'NOME DESTINATÁRIO']
+    
+        # Verifica se todas as colunas existem no dataframe
+        if all(coluna in st.session_state.df.columns for coluna in colunas_necessarias):
+            df_vendas = st.session_state.df[st.session_state.df['NATUREZA DA OPERAÇÃO'].str.contains("VENDA", case=False, na=False)]
+        
+            faturamento_total = df_vendas['VALOR TOTAL'].sum()
+            num_notas = len(df_vendas['NÚMERO'].unique())
+            ticket_medio = faturamento_total / num_notas if num_notas > 0 else 0
+            num_clientes = df_vendas['NOME DESTINATÁRIO'].nunique()
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Faturamento Bruto (Vendas)", f"R$ {faturamento_total:,.2f}")
-        col2.metric("Notas Fiscais de Venda", num_notas)
-        col3.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
-        col4.metric("Clientes Únicos", num_clientes)
-    except Exception:
-        st.warning("Não foi possível gerar o dashboard. Verifique as colunas do seu arquivo.")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Faturamento Bruto (Vendas)", f"R$ {faturamento_total:,.2f}")
+            col2.metric("Notas Fiscais de Venda", num_notas)
+            col3.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
+            col4.metric("Clientes Únicos", num_clientes)
+        else:
+            # Mensagem mais específica se as colunas estiverem faltando
+            st.warning("Dashboard não pôde ser gerado. Verifique se o arquivo carregado contém as colunas necessárias: 'NATUREZA DA OPERAÇÃO', 'VALOR TOTAL', etc.")
+    except Exception as e:
+        st.error(f"Ocorreu um erro inesperado ao gerar o dashboard: {e}")
 
     st.header("Chat com o Agente Fiscal")
 
