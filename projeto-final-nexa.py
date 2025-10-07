@@ -1,27 +1,16 @@
+# app.py (FINAL STABLE VERSION)
+
 import streamlit as st
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+
+# --- Core LangChain Imports ---
 from langchain_google_genai import ChatGoogleGenerativeAI
-# Importações para o novo agente com múltiplas ferramentas
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_experimental.agents import create_pandas_dataframe_agent
-
-# --- 1. DEFINIÇÃO DO PROMPT DO AGENTE FISCAL ---
-PREFIXO_AGENTE_FISCAL_OTIMIZADO = """
-Você é um assistente fiscal de IA para PMEs no Brasil. Sua função é responder perguntas usando as ferramentas disponíveis.
-
-### FERRAMENTAS DISPONÍVEIS ###
-1.  **pandas_tool**: Use esta ferramenta para analisar o dataframe `df` de notas fiscais carregado pelo usuário. Ela pode responder perguntas sobre faturamento, produtos, clientes, etc.
-2.  **web_search**: Use esta ferramenta para buscar informações atualizadas na internet que não estão no dataframe, como alíquotas de impostos, regras fiscais, legislação e tabelas do Simples Nacional.
-
-### REGRAS PRINCIPAIS ###
-1.  **Estrutura da Resposta Final:** Apresente primeiro o resultado direto e, em seguida, uma breve explicação de como você chegou a ele. Use formatação de markdown para clareza.
-2.  **FOCO TOTAL NOS DADOS E BUSCA:** Responda APENAS com base no dataframe `df` ou em informações obtidas pela ferramenta `web_search`. Se a pergunta for sobre outro assunto, recuse educadamente.
-3.  **Pense Passo a Passo:** Para perguntas complexas, explique seu plano. Ex: "Para calcular o imposto, primeiro usarei a ferramenta `pandas_tool` para obter o faturamento do mês. Depois, usarei a `web_search` para encontrar a alíquota correta. Por fim, farei o cálculo."
-"""
+from langchain_community.tools import PythonAstREPLTool
 
 # --- Configuração da Página Streamlit ---
 st.set_page_config(page_title="Agente Fiscal Inteligente", page_icon="🧾", layout="wide")
@@ -29,9 +18,8 @@ st.title("🧾 Agente Fiscal Inteligente")
 st.write("Análise fiscal, cálculo de impostos e insights com o poder da IA e busca na web.")
 
 # --- Inicialização do Estado da Sessão ---
-# ... (sem mudanças aqui) ...
 if "google_api_key" not in st.session_state: st.session_state.google_api_key = None
-if "tavily_api_key" not in st.session_state: st.session_state.tavily_api_key = None # Nova chave
+if "tavily_api_key" not in st.session_state: st.session_state.tavily_api_key = None
 if "df" not in st.session_state: st.session_state.df = None
 if "agent" not in st.session_state: st.session_state.agent = None
 if "messages" not in st.session_state: st.session_state.messages = []
@@ -40,31 +28,25 @@ if "uploaded_file_name" not in st.session_state: st.session_state.uploaded_file_
 # --- Barra Lateral (Sidebar) para Configurações ---
 with st.sidebar:
     st.header("1. Configuração das APIs")
-    
-    # Chave do Google
     google_api_key_input = st.text_input("Chave da API do Google", type="password", help="Necessária para o modelo de linguagem.")
     if google_api_key_input:
         st.session_state.google_api_key = google_api_key_input
         os.environ["GOOGLE_API_KEY"] = google_api_key_input
 
-    # Chave da Tavily
     tavily_api_key_input = st.text_input("Chave da API da Tavily", type="password", help="Necessária para a busca na web.")
     if tavily_api_key_input:
         st.session_state.tavily_api_key = tavily_api_key_input
         os.environ["TAVILY_API_KEY"] = tavily_api_key_input
 
-    # Confirmação visual
     if st.session_state.google_api_key: st.sidebar.success("API do Google configurada.", icon="🔑")
     if st.session_state.tavily_api_key: st.sidebar.success("API da Tavily configurada.", icon="🔎")
 
     st.header("2. Perfil da Empresa")
-    # ... (sem mudanças aqui) ...
     regime_tributario = st.selectbox("Regime Tributário", ["Simples Nacional", "Lucro Presumido"])
     faturamento_anual = st.number_input("Faturamento Anual Acumulado (R$)", min_value=0.0, step=1000.0)
     cnae = st.text_input("Atividade Principal (CNAE)", placeholder="Ex: 4781-4/00")
 
     st.header("3. Upload dos Documentos")
-    # ... (sem mudanças aqui) ...
     arquivo = st.file_uploader("Faça o upload de um arquivo (CSV ou Excel)", type=["csv", "xlsx"])
     if arquivo is not None and st.session_state.get('uploaded_file_name') != arquivo.name:
         try:
@@ -84,11 +66,8 @@ with st.sidebar:
 if st.session_state.google_api_key and st.session_state.tavily_api_key and st.session_state.df is not None:
     
     st.header("Dashboard Gerencial")
-    # --- NOVO DASHBOARD MELHORADO ---
     try:
         df_vendas = st.session_state.df[st.session_state.df['NATUREZA DA OPERAÇÃO'].str.contains("VENDA", case=False)]
-        
-        # KPIs
         faturamento_total = df_vendas['VALOR TOTAL'].sum()
         num_notas = len(df_vendas['NÚMERO'].unique())
         ticket_medio = faturamento_total / num_notas if num_notas > 0 else 0
@@ -99,49 +78,39 @@ if st.session_state.google_api_key and st.session_state.tavily_api_key and st.se
         col2.metric("Notas Fiscais de Venda", num_notas)
         col3.metric("Ticket Médio", f"R$ {ticket_medio:,.2f}")
         col4.metric("Clientes Únicos", num_clientes)
-
-        st.divider()
-
-        # Gráficos
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Top 5 Clientes por Faturamento")
-            top_5_clientes = df_vendas.groupby('NOME DESTINATÁRIO')['VALOR TOTAL'].sum().nlargest(5)
-            st.bar_chart(top_5_clientes)
-        with col2:
-            st.subheader("Vendas por Estado (UF)")
-            vendas_por_uf = df_vendas.groupby('UF DESTINATÁRIO')['VALOR TOTAL'].sum()
-            st.bar_chart(vendas_por_uf)
-
-    except Exception as e:
-        st.warning(f"Não foi possível gerar o dashboard completo. Verifique as colunas do seu arquivo. Erro: {e}")
+    except Exception:
+        st.warning("Não foi possível gerar o dashboard. Verifique as colunas do seu arquivo.")
 
     st.header("Chat com o Agente Fiscal")
 
-# --- TEMPORARY FAILSAFE AGENT CREATION ---
-if st.session_state.agent is None:
-    st.info("Inicializando o agente em modo de segurança...")
-    try:
-        # We are temporarily removing the web search tool to ensure the app loads.
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0, api_version="v1")
-        
-        st.session_state.agent = create_pandas_dataframe_agent(
-            llm=llm,
-            df=st.session_state.df,
-            agent_type='tool-calling',
-            verbose=True,
-            handle_parsing_errors=True
-        )
-        
-        st.success("Agente em modo de segurança carregado com sucesso!")
-        st.warning("Busca na web está temporariamente desativada.")
+    if st.session_state.agent is None:
+        st.info("Inicializando o agente fiscal com busca na web...")
+        try:
+            llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0, api_version="v1")
+            
+            pandas_tool = PythonAstREPLTool(
+                name="analise_documento_fiscal",
+                description="Use esta ferramenta para fazer qualquer análise ou cálculo sobre o dataframe `df` de notas fiscais. O input para a ferramenta deve ser um código Python válido.",
+                locals={"df": st.session_state.df}
+            )
+            search_tool = TavilySearchResults(max_results=3, name="busca_web_informacoes_fiscais")
+            tools = [pandas_tool, search_tool]
+            
+            prompt_template = ChatPromptTemplate.from_messages([
+                ("system", """Você é um assistente fiscal de IA para PMEs no Brasil. Use as ferramentas `analise_documento_fiscal` para consultar os dados do arquivo e `busca_web_informacoes_fiscais` para pesquisar leis e alíquotas na internet. Combine as ferramentas quando necessário. Responda de forma clara e estruturada."""),
+                ("placeholder", "{chat_history}"),
+                ("human", "{input}"),
+                ("placeholder", "{agent_scratchpad}"),
+            ])
+            
+            agent = create_tool_calling_agent(llm, tools, prompt_template)
+            st.session_state.agent = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
+            
+            st.success("Agente com acesso à internet pronto!")
+        except Exception as e:
+            st.error(f"Erro ao criar o agente: {e}")
+            st.stop()
 
-    except Exception as e:
-        st.error(f"Erro ao criar o agente em modo de segurança: {e}")
-        st.stop()
-
-
-    # Lógica do Chat (com o prompt aumentado)
     if not st.session_state.messages:
         st.session_state.messages.append({"role": "assistant", "content": "Olá! Sou seu assistente fiscal. Analise o dashboard e me faça uma pergunta."})
 
@@ -157,14 +126,7 @@ if st.session_state.agent is None:
         with st.chat_message("assistant"):
             with st.spinner("O agente está pensando e pesquisando..."):
                 try:
-                    prompt_aumentado = f"""
-                    CONTEXTO DA EMPRESA:
-                    - Regime: {regime_tributario}
-                    - Faturamento Anual: R$ {faturamento_anual}
-                    - CNAE: {cnae}
-                    
-                    PERGUNTA: {prompt}
-                    """
+                    prompt_aumentado = f"CONTEXTO DA EMPRESA: Regime: {regime_tributario}, Faturamento Anual: R$ {faturamento_anual}, CNAE: {cnae}. PERGUNTA: {prompt}"
                     chat_history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
                     response = st.session_state.agent.invoke({"input": prompt_aumentado, "chat_history": chat_history})
                     output_text = response["output"]
